@@ -14,16 +14,15 @@ const server = net.createServer((socket) => {
     for(let idx in packets) {
       const p = packets[idx].split(":")
 
-      if(p[0] == "%%EOF") {
-        console.log(result)
-        const buffer = Buffer.from(result, 'hex');
-        console.log(buffer)
-        fs.writeFileSync("./res.txt", buffer);
-        break;
-      }
-
 
       if(err == -1) {
+        if(p[0] == "%%EOF") {
+          console.log(result)
+          const buffer = Buffer.from(result, 'hex');
+          console.log(buffer)
+          fs.writeFileSync("./res.txt", buffer);
+          break;
+        }
         if(Math.random() < 0.2) {
           console.log("Packet loss",  p[0])
           err = parseInt(p[0])
