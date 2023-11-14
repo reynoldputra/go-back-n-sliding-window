@@ -1,25 +1,33 @@
+const fs = require('fs')
 const net = require('net');
 
 const client = new net.Socket();
 client.readableHighWaterMark
 
-client.connect(3000, 'localhost', () => {
-  console.log('Client connected');
 
-  let timeoutId 
-  let N = 4;
+client.connect(3001, 'localhost', () => {
+  let timeoutId;
   let TIMEOUT = 2000;
-  const ranges = range(0, 20)
-  let _window = []
+  let N = 4;
+  let _window = [];
+  const filePath = './test.txt';
+
+  const binary = Buffer.from(fs.readFileSync(filePath), 'base64');
+
+  let ranges = [];
+
+  for (let i = 0; i < binary.length; i++) {
+    ranges.push(`${i + 1}:${binary.slice(i, i + 4)};`)
+  }
 
   function sendWindowPacket() {
-    if(!ranges.length) {
+    if (!ranges.length) {
       clearTimeout(timeoutId)
       client.end()
       return
     }
 
-    while(_window.length < N && ranges.length){
+    while (_window.length < N && ranges.length) {
       _window.push(ranges.shift())
     }
 
@@ -32,9 +40,8 @@ client.connect(3000, 'localhost', () => {
     client.write(msg.join(""))
   }
 
-  function sendPacket (p) {
-    client.write(p.toString()+":")
-
+  function sendPacket(p) {
+    client.write(p.toString() + ":")
   }
 
   client.on('data', (data) => {
@@ -42,12 +49,12 @@ client.connect(3000, 'localhost', () => {
       console.log("Timeout, retransmitting...");
       sendWindowPacket()
     }, TIMEOUT);
- 
+
     const acks = data.toString().split(":")
     acks.pop()
     acks.forEach((ack) => {
       console.log(_window, ack)
-      if(ack == _window[0]) {
+      if (ack == _window[0]) {
         clearTimeout(timeoutId);
         timeoutId = setTimeout(() => {
           console.log("Timeout, retransmitting...");
@@ -55,7 +62,7 @@ client.connect(3000, 'localhost', () => {
         }, TIMEOUT);
         console.log("ack success " + _window[0])
         _window.shift()
-        if(ranges.length) {
+        if (ranges.length) {
           const p = ranges.shift()
           _window.push(p)
           sendPacket(p)
@@ -76,11 +83,11 @@ client.on('close', () => {
 });
 
 function range(start, end) {
-    var ans = [];
-    for (let i = start; i <= end; i++) {
-        ans.push(i);
-    }
+  var ans = [];
+  for (let i = start; i <= end; i++) {
+    ans.push(i);
+  }
 
-    return ans;
+  return ans;
 }
 
