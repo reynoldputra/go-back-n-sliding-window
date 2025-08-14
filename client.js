@@ -1,7 +1,9 @@
 const net = require('net');
+const fs = require('fs')
 
 const client = new net.Socket();
-client.readableHighWaterMark
+
+const hexBuffer = Buffer.from(fs.readFileSync("./test.txt")).toString('hex')
 
 client.connect(3000, 'localhost', () => {
   console.log('Client connected');
@@ -9,11 +11,22 @@ client.connect(3000, 'localhost', () => {
   let timeoutId 
   let N = 4;
   let TIMEOUT = 2000;
-  const ranges = range(0, 20)
+  const ranges = splitString(hexBuffer, 4)
   let _window = []
+
+  console.log(hexBuffer);
+
+  function resetTimeout(){
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => {
+      console.log("Timeout, retransmitting...");
+      sendWindowPacket()
+    }, TIMEOUT);
+  }
 
   function sendWindowPacket() {
     if(!ranges.length) {
+      sendPacket("%%EOF;")
       clearTimeout(timeoutId)
       client.end()
       return
@@ -24,46 +37,44 @@ client.connect(3000, 'localhost', () => {
     }
 
     const msg = _window.map(p => {
-      const payload = p + ":"
-      console.log("Sending " + p)
+      const payload = p.index + ":" + p.string + ";"
+      console.log("Sending" , p)
       return payload
     })
 
+    console.log(msg.join(""))
+
     client.write(msg.join(""))
+
+    resetTimeout()
   }
 
   function sendPacket (p) {
-    client.write(p.toString()+":")
-
+    const payload = p.index + ":" + p.string + ";"
+    client.write(payload)
+    resetTimeout()
   }
 
   client.on('data', (data) => {
-    timeoutId = setTimeout(() => {
-      console.log("Timeout, retransmitting...");
-      sendWindowPacket()
-    }, TIMEOUT);
- 
-    const acks = data.toString().split(":")
+    const acks = data.toString().split(";")
     acks.pop()
     acks.forEach((ack) => {
       console.log(_window, ack)
-      if(ack == _window[0]) {
-        clearTimeout(timeoutId);
-        timeoutId = setTimeout(() => {
-          console.log("Timeout, retransmitting...");
-          sendWindowPacket()
-        }, TIMEOUT);
-        console.log("ack success " + _window[0])
+      if(ack == _window[0].index) {
+        resetTimeout()
+        console.log("ack success", _window[0])
         _window.shift()
         if(ranges.length) {
           const p = ranges.shift()
           _window.push(p)
           sendPacket(p)
         } else {
+          client.write("%%EOF;")
           clearTimeout(timeoutId)
+          client.end()
         }
       } else {
-        console.log("ack error " + _window[0])
+        console.log("ack error ", _window[0])
       }
     })
   });
@@ -84,3 +95,12 @@ function range(start, end) {
     return ans;
 }
 
+function splitString(str, chunkSize) {
+  var result = [];
+  let j = 0;
+  for (var i = 0; i < str.length; i += chunkSize) {
+    result.push({index : j, string : str.slice(i, i + chunkSize)});
+    j++
+  }
+  return result;
+}
